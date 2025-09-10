@@ -1,0 +1,9 @@
+.smart-tooltip{ background:rgba(2,6,23,0.9); color:#e6eef8; padding:8px 10px; border-radius:8px; font-size:13px; box-shadow:0 6px 18px rgba(2,6,23,0.6); transition:opacity .15s ease,transform .12s ease; opacity:0; transform:translateY(6px); }
+.smart-tooltip:not(.hidden){ opacity:1; transform:translateY(0); }
+.smart-detect{ border-bottom:1px dashed rgba(255,255,255,0.08); cursor:help; }
+.smart-tooltip.hidden{ display:block; pointer-events:none; }
+
+/* formula line and toggle */
+.smart-tooltip .formula{ font-size:11px; opacity:0.9; margin-top:6px; color:#d6e6ff; }
+.smart-tooltip .formula.hidden{ display:none; }
+.smart-tooltip .toggle{ display:inline-block; margin-top:6px; color:#9fb4ff; cursor:pointer; font-size:11px; user-select:none; }

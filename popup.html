@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Smart Converter</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Smart Converter</h1>
+      <div class="tabs">
+        <button id="tab-settings" class="tab active">Settings</button>
+        <button id="tab-preview" class="tab">Preview</button>
+      </div>
+
+      <div id="settings" class="panel">
+        <label>Currency</label>
+        <select id="pref-currency">
+          <option value="INR">INR (₹)</option>
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="JPY">JPY (¥)</option>
+          <option value="AUD">AUD (A$)</option>
+          <option value="CAD">CAD (C$)</option>
+          <option value="CNY">CNY (¥ / 元)</option>
+          <option value="SGD">SGD (S$)</option>
+        </select>
+
+        <label>Temperature</label>
+        <select id="pref-temperature">
+          <option value="C">Celsius (°C)</option>
+          <option value="F">Fahrenheit (°F)</option>
+          <option value="K">Kelvin (K)</option>
+        </select>
+
+        <label>Time Zone</label>
+        <select id="pref-timezone">
+          <option value="IST">IST (UTC+5:30)</option>
+          <option value="UTC">UTC (UTC+0)</option>
+          <option value="PST">PST (UTC-8)</option>
+          <option value="EST">EST (UTC-5)</option>
+          <option value="CET">CET (UTC+1)</option>
+        </select>
+
+    <label class="checkbox-row"><input type="checkbox" id="pref-show-formula" /> Show formula line in tooltip</label>
+
+    <button id="save">Save</button>
+  <button id="refresh-rates" title="Fetch latest FX rates">Refresh rates</button>
+      </div>
+
+      <div id="preview" class="panel hidden">
+        <div class="sample">
+          <div>100 USD → <span id="preview-currency"></span></div>
+          <div>100 JPY → <span id="preview-jpy"></span></div>
+          <div>100 AUD → <span id="preview-aud"></span></div>
+          <div>100 CAD → <span id="preview-cad"></span></div>
+          <div>100 CNY → <span id="preview-cny"></span></div>
+          <div>100 SGD → <span id="preview-sgd"></span></div>
+          <div>72°F → <span id="preview-temp"></span></div>
+          <div>9:00 AM PST → <span id="preview-time"></span></div>
+        </div>
+        <div class="conv-wrap">
+          <h3>Conversion table (1 unit → your currency)</h3>
+          <table id="conversion-table" class="conv-table">
+            <thead><tr><th>From</th><th>To</th><th>Value</th></tr></thead>
+            <tbody>
+              <!-- rows populated by JS -->
+            </tbody>
+          </table>
+          <div class="fx-updated">Rates last updated: <span id="fx-updated">n/a</span></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Converter (MVP)",
+  "version": "0.1.0",
+  "description": "Converts currency, temperature and time locally based on user preferences.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": [
+    "https://api.frankfurter.dev/*",
+    "https://frankfurter.dev/*",
+    "https://api.frankfurter.app/*"
+  ],
+  "action": {
+    "default_title": "Smart Converter",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icons/icon48.svg",
+    "128": "icons/icon48.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["tooltip.css"]
+    }
+  ]
+}
