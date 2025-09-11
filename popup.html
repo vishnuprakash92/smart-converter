@@ -46,6 +46,33 @@
 
     <label class="checkbox-row"><input type="checkbox" id="pref-show-formula" /> Show formula line in tooltip</label>
 
+        <label>Measurement system</label>
+        <select id="pref-measurement">
+          <option value="Metric">Metric</option>
+          <option value="Imperial">Imperial</option>
+        </select>
+
+        <label>Number format</label>
+        <select id="pref-number-locale">
+          <option value="auto">Auto (browser locale)</option>
+          <option value="en-IN">Indian (en-IN)</option>
+          <option value="en-US">US (en-US)</option>
+          <option value="de-DE">German (de-DE)</option>
+          <option value="fr-FR">French (fr-FR)</option>
+        </select>
+
+        <label>Number preview</label>
+        <div class="number-preview-row">
+          <input id="pref-number-input" type="text" placeholder="Type a number, e.g. 12345.67" />
+          <div id="pref-number-formatted" class="number-formatted">—</div>
+        </div>
+        
+          <label>Measurement preview</label>
+          <div class="measurement-preview-row">
+            <input id="pref-meas-input" type="text" placeholder="Type e.g. 12 in, 2.5 kg, 1 tsp" />
+            <div id="pref-meas-output" class="meas-output">—</div>
+          </div>
+
     <button id="save">Save</button>
   <button id="refresh-rates" title="Fetch latest FX rates">Refresh rates</button>
       </div>
@@ -60,6 +87,9 @@
           <div>100 SGD → <span id="preview-sgd"></span></div>
           <div>72°F → <span id="preview-temp"></span></div>
           <div>9:00 AM PST → <span id="preview-time"></span></div>
+          <div>12 in → <span id="preview-meas-in"></span></div>
+          <div>2.5 kg → <span id="preview-meas-kg"></span></div>
+          <div>1 gal → <span id="preview-meas-gal"></span></div>
         </div>
         <div class="conv-wrap">
           <h3>Conversion table (1 unit → your currency)</h3>
