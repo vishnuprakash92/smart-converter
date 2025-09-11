@@ -4,7 +4,11 @@
   // New: process element-level textContent to find matches that may span multiple text nodes
   const CURRENCY_REGEX = /\b\d+(?:\.\d+)?\s?(USD|EUR|GBP|INR|JPY|AUD|CAD|CNY|SGD)\b/g;
   const CURRENCY_SYMBOL_REGEX = /(?:\$|₹|€|£|¥|A\$|C\$|S\$|元)\s?[\d,]+(?:\.\d+)?/g;
-  const TEMP_REGEX = /\b\d+(?:\.\d+)?\s?(°F|°C|K)\b/g;
+  // more robust temperature regex:
+  // - supports optional sign and decimals
+  // - allows optional degree symbol or the word 'degrees'
+  // - matches unit names and words (C, F, K, Celsius, Fahrenheit)
+  const TEMP_REGEX = /(-?\d+(?:\.\d+)?)(?:\s*(?:°|\u00b0)?\s*(?:deg(?:rees)?)?)?\s*(?:°|\u00b0)?\s*(C|F|K|Celsius|Fahrenheit)\b/gi;
   const TIME_REGEX = /\b\d{1,2}:\d{2}\s?(AM|PM)?\s?(PST|EST|CET|IST)\b/gi;
 
   // default hardcoded rates (fallback)
@@ -14,6 +18,9 @@
   let fxRates = null; // { base: 'INR', rates: { USD:0.01135, ... } }
   // preference: whether to show the formula line in the tooltip
   let SHOW_FORMULA = true;
+  // unit tokens loaded from external config (populated below). We'll build unitRegex from this list.
+  let UNIT_TOKENS = [ 'c','celsius','f','fahrenheit','k','kelvin','°c','°f' ];
+  let unitRegex = new RegExp('(?:' + UNIT_TOKENS.map(u => u.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')).join('|') + ')', 'i');
   // safe wrapper for chrome.storage access to avoid exceptions when extension context is invalidated
   function safeGetStorage(defaults, cb){
     try{
@@ -303,7 +310,9 @@
     if(el.closest && el.closest('script,style,textarea,input')) return;
     if(el.closest && el.closest('.smart-detect')) return;
   // avoid large blocks; prefer textContent but fall back to innerText for some sites (e.g., Amazon offscreen text)
-  const text = (el.textContent && el.textContent.trim().length) ? el.textContent : (el.innerText || '');
+  let text = (el.textContent && el.textContent.trim().length) ? el.textContent : (el.innerText || '');
+    // normalize characters that break matching: unicode minus, non-breaking spaces, collapse whitespace
+    try{ text = text.replace(/\u2212/g,'-').replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim(); }catch(e){}
     if(!text || text.length > 1000) return;
 
     const matches = [];
@@ -344,9 +353,10 @@
           const sym = m.text.match(/(\$|₹|€|£)\s?([\d,]+(?:\.\d+)?)/);
           if(sym){ const symbol = sym[1]; const raw = sym[2].replace(/,/g,''); const amt = parseFloat(raw); const map = { '$':'USD', '€':'EUR', '£':'GBP', '₹':'INR' }; const unit = map[symbol]||'USD'; attachHover(span, {type:'currency', amt, unit, target: prefs.currency}, (t)=>convertCurrency(t.amt, t.unit, prefs.currency)); }
         }
-      } else if(m.type === 'temp'){
-        const parts = m.text.match(/(\d+(?:\.\d+)?)\s?(°F|°C|K)/i);
-  if(parts){ const val = parseFloat(parts[1]); const unit = parts[2].toUpperCase(); attachHover(span, {type:'temp', val, unit, target: prefs.temperature}, (t)=>convertTemp(t.val, t.unit, prefs.temperature)); }
+  } else if(m.type === 'temp'){
+    // parse with the robust TEMP_REGEX pattern (supports words like 'Celsius' and optional degree symbols)
+    const parts = m.text.match(/(-?\d+(?:\.\d+)?)(?:\s*(?:°|\u00b0)?\s*(?:deg(?:rees)?)?)?\s*(?:°|\u00b0)?\s*(C|F|K|Celsius|Fahrenheit)/i);
+  if(parts){ const raw = parts[1].replace(/,/g,''); const val = parseFloat(raw); let unit = (parts[2] || '').toUpperCase(); if(unit.startsWith('C')) unit = 'C'; else if(unit.startsWith('F')) unit = 'F'; else if(unit.startsWith('K')) unit = 'K'; attachHover(span, {type:'temp', val, unit, target: prefs.temperature}, (t)=>convertTemp(t.val, t.unit, prefs.temperature)); }
       } else if(m.type === 'time'){
         const parts = m.text.match(/(\d{1,2}):(\d{2})\s?(AM|PM)?\s?(PST|EST|CET|IST)/i);
   if(parts){ const hh = parseInt(parts[1],10); const mm = parseInt(parts[2],10); const ampm = parts[3]; const tz = parts[4].toUpperCase(); attachHover(span, {type:'time', hh, mm, ampm, tz, target: prefs.timezone}, (t)=>convertTime(t.hh, t.mm, t.ampm, t.tz, prefs.timezone)); }
@@ -468,13 +478,88 @@
   }
 
   // initial
-  createTooltip();
-  loadAndRun();
+  // createTooltip and scans will be started after unit tokens are loaded below
 
-  // also run split-price scanner
+  // Detect split temperatures where numeric and unit parts are in separate sibling nodes (e.g., '72' and '°F')
+  function scanForSplitTemps(root, prefs){
+    // localized / variant unit tokens to broaden language coverage
+    // include common spellings and local words: English, Spanish, French, German, Portuguese, Italian
+    const UNIT_TOKENS = [
+      // Celsius variants
+      'c', 'celsius', 'centigrade', 'cent edgrados', 'cent igrados', 'cent igrado', 'grado c', 'grados c', 'degres', 'degr[ée]s', 'celsius',
+      // Fahrenheit variants
+      'f', 'fahrenheit', 'fahrenheit', 'grado f', 'grados f',
+      // Kelvin
+      'k', 'kelvin'
+    ];
+    // build a regex to match any unit word/token (word boundary aware)
+  // use pre-built unitRegex (dynamically loaded when available)
+
+    // narrower selectors: focus on elements that commonly hold temperatures (classes/ids with temp/degree/weather) to reduce false positives
+    const selectorList = [
+      '.temp', '.temperature', '[class*="temp"]', '[id*="temp"]', '.degree', '.degrees', '[class*="degree"]',
+      '.weather', '.forecast', '.wx', '.temperature__value', '.w-temperature', 'span', 'p', 'div', 'li', 'td'
+    ];
+    const candidates = root.querySelectorAll(selectorList.join(','));
+    debugLog('scanForSplitTemps: candidates', candidates.length);
+    candidates.forEach(el => {
+      if(el.closest('script,style,textarea,input')) return;
+      if(el.closest('.smart-detect')) return;
+      if((el.innerText || '').length > 120) return;
+      const childNodes = Array.from(el.childNodes);
+      if(childNodes.length < 2) return;
+
+      for(let i=0;i<childNodes.length-1;i++){
+        const a = childNodes[i];
+        const b = childNodes[i+1];
+        if(!a || !b) continue;
+        const aText = (a.textContent||'').trim();
+        const bText = (b.textContent||'').trim();
+        if(!aText || !bText) continue;
+  // numeric then unit (unit may appear as a word like 'Celsius', 'grados', etc.)
+  if(/^[-+]?\d+[\d,]*(?:\.\d+)?$/.test(aText) && unitRegex.test(bText)){
+          const combined = aText + ' ' + bText;
+          const span = document.createElement('span'); span.className = 'smart-detect'; span.textContent = combined;
+          const parts = combined.match(/(-?\d+(?:\.\d+)?).*?(C|F|K|Celsius|Fahrenheit)/i);
+          if(parts){ const val = parseFloat(parts[1].replace(/,/g,'')); let unit = (parts[2]||'').toUpperCase(); if(unit.startsWith('C')) unit = 'C'; else if(unit.startsWith('F')) unit = 'F'; else if(unit.startsWith('K')) unit = 'K'; attachHover(span, { type:'temp', val, unit, target: prefs.temperature }, (t)=>convertTemp(t.val, t.unit, prefs.temperature)); }
+          try{
+            const range = document.createRange(); range.setStartBefore(a); range.setEndAfter(b); range.deleteContents(); range.insertNode(span);
+          }catch(e){ try{ a.parentNode.insertBefore(span, a); a.parentNode.removeChild(a); a.parentNode.removeChild(b); }catch(err){} }
+          i++;
+        }
+      }
+    });
+  }
+  // run split-temp scanner too
   chrome.storage.sync.get({ currency:'INR', temperature:'C', timezone:'IST' }, (prefs)=>{
-    try{ scanForSplitPrices(document.body, prefs); }catch(e){ console.error(e); }
+    try{ scanForSplitTemps(document.body, prefs); }catch(e){ console.error(e); }
   });
+
+  // load tokens and then start tooltip + scanning
+  (async function loadUnitTokensAndStart(){
+    try{
+      const url = chrome.runtime.getURL('unit_tokens.json');
+      const res = await fetch(url);
+      if(res && res.ok){
+        const data = await res.json();
+        if(data && Array.isArray(data.units) && data.units.length){
+          UNIT_TOKENS = data.units.slice();
+          unitRegex = new RegExp('(?:' + UNIT_TOKENS.map(u => u.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')).join('|') + ')', 'i');
+          debugLog('Loaded unit tokens', UNIT_TOKENS.slice(0,40));
+        }
+      }
+    }catch(e){ debugLog('Failed to load unit tokens, using defaults', e); }
+
+    // now start tooltip and scans
+    createTooltip();
+    loadAndRun();
+    chrome.storage.sync.get({ currency:'INR', temperature:'C', timezone:'IST' }, (prefs)=>{
+      try{ scanForSplitPrices(document.body, prefs); }catch(e){ console.error(e); }
+    });
+    chrome.storage.sync.get({ currency:'INR', temperature:'C', timezone:'IST' }, (prefs)=>{
+      try{ scanForSplitTemps(document.body, prefs); }catch(e){ console.error(e); }
+    });
+  })();
 
   // listen for storage changes (fxRates or prefs) and re-run annotation on tabs
   try{
@@ -492,6 +577,7 @@
               try{ clearAnnotations(); }catch(e){ debugLog('clearAnnotations failed', e); }
               loadAndRun();
               try{ scanForSplitPrices(document.body, { currency: (changes.currency && changes.currency.newValue) || (changes.fxRates? (items.fxRates && items.fxRates.base) : undefined) || 'INR' }); }catch(e){};
+              try{ scanForSplitTemps(document.body, { temperature: (changes.temperature && changes.temperature.newValue) || 'C' }); }catch(e){};
               scheduledRun = null;
             }, 200);
           });
