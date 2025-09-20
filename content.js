@@ -437,7 +437,7 @@
         const parts = m.text.match(/(\d{1,2}):(\d{2})\s?(AM|PM)?\s?(PST|EST|CET|IST)/i);
   if(parts){ const hh = parseInt(parts[1],10); const mm = parseInt(parts[2],10); const ampm = parts[3]; const tz = parts[4].toUpperCase(); attachHover(span, {type:'time', hh, mm, ampm, tz, target: prefs.timezone}, (t)=>convertTime(t.hh, t.mm, t.ampm, t.tz, prefs.timezone)); }
       } else if(m.type === 'measurement'){
-        const parts = m.text.match(/(-?\d+(?:\.\d+)?)(?:\s*)(cm|m|km|in|ft|yd|mi|g|kg|lb|oz|ml|l|gal)/i);
+        const parts = m.text.match(/(-?\d+(?:\.\d+)?)(?:\s*)(mm|cm|m|km|in|ft|yd|mi|mcg|ug|mg|g|kg|t|ton|tonne|lb|oz|ml|l|m3|m\^3|cubic\s*m|cubic\s*meter|cubic\s*metre|gal|pt|cup|tsp|teaspoon|tbsp|tablespoon)/i);
         if(parts){
           const val = parseFloat(parts[1].replace(/,/g,''));
           let unit = (parts[2] || '').toLowerCase().trim();
