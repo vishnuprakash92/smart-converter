@@ -166,7 +166,7 @@
       // length: convert everything to meters as intermediate
     const lengthToM = { mm:0.001, cm: 0.01, m:1, km:1000, in:0.0254, ft:0.3048, yd:0.9144, mi:1609.34 };
     // weights: grams as intermediate (include tonne/tonne variants)
-    const weightToG = { mcg:0.000001, ug:0.001, mg:0.001, g:1, kg:1000, t:1000000, ton:907185, lb:453.592, oz:28.3495 };
+    const weightToG = { mcg:0.000001, ug:0.000001, mg:0.001, g:1, kg:1000, t:1000000, ton:907185, lb:453.592, oz:28.3495 };
     // volumes: liters as intermediate, include cubic meters, teaspoons, tablespoons
     const volToL = { ml:0.001, l:1, 'm3':1000, 'm^3':1000, 'cubic m':1000, gal:3.78541, pt:0.473176, cup:0.24, tsp:0.00492892, tbsp:0.0147868 };
     if(lengthToM[unit] !== undefined){
