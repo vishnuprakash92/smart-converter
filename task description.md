@@ -102,3 +102,42 @@ Write content.js for regex detection + hover listeners.
 Build tooltip.css for a clean look.
 
 Test on sample-page.html.
+
+
+
+🔄 New Requirement: Measurement Conversion & Number Formatting
+6. Measurement Conversion
+
+Detect common units for length, weight, and volume:
+
+\b\d+(\.\d+)?\s?(cm|m|km|in|ft|yd|mi|g|kg|lb|oz|ml|l|gal)\b
+
+
+Conversion rules (examples for MVP):
+
+Length: 1 in = 2.54 cm, 1 ft = 30.48 cm, 1 mi = 1.609 km.
+
+Weight: 1 lb = 0.4536 kg, 1 oz = 28.35 g.
+
+Volume: 1 gal = 3.785 l, 1 ml = 0.001 l.
+
+Respect user preference (Metric or Imperial) stored in settings.
+
+Show tooltip with converted measurement on hover.
+
+7. Number Formatting (Locale-Aware)
+
+Detect large numbers or formatted numbers:
+
+\b\d{1,3}(,\d{3})+(\.\d+)?\b|\b\d+(\.\d+)?\b
+
+
+Convert number into user’s preferred locale style using Intl.NumberFormat.
+
+Example:
+
+1,234,567.89 → 12,34,567.89 (Indian numbering system).
+
+1,234,567.89 → 1.234.567,89 (European style).
+
+Add dropdown in settings for number format preference.

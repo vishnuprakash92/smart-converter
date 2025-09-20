@@ -10,6 +10,8 @@
   // - matches unit names and words (C, F, K, Celsius, Fahrenheit)
   const TEMP_REGEX = /(-?\d+(?:\.\d+)?)(?:\s*(?:°|\u00b0)?\s*(?:deg(?:rees)?)?)?\s*(?:°|\u00b0)?\s*(C|F|K|Celsius|Fahrenheit)\b/gi;
   const TIME_REGEX = /\b\d{1,2}:\d{2}\s?(AM|PM)?\s?(PST|EST|CET|IST)\b/gi;
+  // detection for common measurement units (length, weight, volume)
+  const MEASUREMENT_REGEX = /\b(-?\d+(?:\.\d+)?)(?:\s*)(mm|cm|m|km|in|ft|yd|mi|mcg|ug|mg|g|kg|t|ton|tonne|lb|oz|ml|l|m3|m\^3|cubic\s*m|cubic\s*meter|cubic\s*metre|gal|pt|cup|tsp|teaspoon|tbsp|tablespoon)\b/gi;
 
   // default hardcoded rates (fallback)
   let ratesToINR = { USD:83, EUR:90, GBP:100, INR:1, JPY:0.55, AUD:55, CAD:60, CNY:12, SGD:62 };
@@ -21,6 +23,9 @@
   // unit tokens loaded from external config (populated below). We'll build unitRegex from this list.
   let UNIT_TOKENS = [ 'c','celsius','f','fahrenheit','k','kelvin','°c','°f' ];
   let unitRegex = new RegExp('(?:' + UNIT_TOKENS.map(u => u.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&')).join('|') + ')', 'i');
+  // measurement preferences
+  let MEASUREMENT_PREF = 'Metric';
+  let NUMBER_LOCALE = 'auto';
   // safe wrapper for chrome.storage access to avoid exceptions when extension context is invalidated
   function safeGetStorage(defaults, cb){
     try{
@@ -45,6 +50,8 @@
     try{ if(!SC_DEBUG && typeof location !== 'undefined' && location.search && location.search.indexOf('sc_debug=1') !== -1) SC_DEBUG = true; }catch(e){}
     debugLog('initialized', { fxRatesLoaded: !!fxRates, ratesToINRLoaded: !!ratesToINR, sc_debug: SC_DEBUG });
   });
+  // also fetch measurement prefs
+  safeGetStorage({ measurement: 'Metric', numberLocale: 'auto' }, (items)=>{ if(items){ if(items.measurement) MEASUREMENT_PREF = items.measurement; if(items.numberLocale) NUMBER_LOCALE = items.numberLocale; } });
 
   function formatCurrencyValue(val, code){
     const symbols = { USD:'$', EUR:'€', GBP:'£', INR:'₹', JPY:'¥', AUD:'A$', CAD:'C$', CNY:'¥', SGD:'S$' };
@@ -148,6 +155,74 @@
     if(to === 'F'){ const f = (c * 9/5) + 32; return { formatted: f.toFixed(1) + ' °F', formula: `${formula} → ${f.toFixed(4)} °F` }; }
     if(to === 'K'){ const k = c + 273.15; return { formatted: k.toFixed(1) + ' K', formula: `${formula} → ${k.toFixed(4)} K` }; }
     return { formatted: c.toFixed(1) + ' °C', formula };
+  }
+
+  // Measurement conversion helpers
+  function convertMeasurement(val, unit, targetSystem){
+    // normalize
+    unit = unit.toLowerCase();
+    const n = Number(val);
+    if(isNaN(n)) return null;
+      // length: convert everything to meters as intermediate
+    const lengthToM = { mm:0.001, cm: 0.01, m:1, km:1000, in:0.0254, ft:0.3048, yd:0.9144, mi:1609.34 };
+    // weights: grams as intermediate (include tonne/tonne variants)
+    const weightToG = { mcg:0.000001, ug:0.000001, mg:0.001, g:1, kg:1000, t:1000000, ton:907185, lb:453.592, oz:28.3495 };
+    // volumes: liters as intermediate, include cubic meters, teaspoons, tablespoons
+    const volToL = { ml:0.001, l:1, 'm3':1000, 'm^3':1000, 'cubic m':1000, gal:3.78541, pt:0.473176, cup:0.24, tsp:0.00492892, tbsp:0.0147868 };
+    if(lengthToM[unit] !== undefined){
+      const meters = n * lengthToM[unit];
+      if(targetSystem === 'Metric'){
+          // prefer m for >= 1 m, cm for < 1 m, mm for very small
+          if(meters >= 1) return { val: meters, unit: 'm' };
+          if(meters >= 0.01) return { val: meters*100, unit: 'cm' };
+          return { val: meters*1000, unit: 'mm' };
+      } else {
+        // convert to feet/inches/miles depending
+          const feet = meters / 0.3048;
+          if(feet >= 5280) return { val: meters / 1609.34, unit: 'mi' };
+          if(feet >= 1) return { val: feet, unit: 'ft' };
+          return { val: meters / 0.0254, unit: 'in' };
+      }
+    }
+    if(weightToG[unit] !== undefined){
+      const grams = n * weightToG[unit];
+      if(targetSystem === 'Metric'){
+          if(grams >= 1000000) return { val: grams/1000000, unit: 't' };
+          if(grams >= 1000) return { val: grams/1000, unit: 'kg' };
+          return { val: grams, unit: 'g' };
+      } else {
+          const lbs = grams / 453.592;
+          if(lbs >= 1) return { val: lbs, unit: 'lb' };
+          return { val: grams / 28.3495, unit: 'oz' };
+      }
+    }
+    if(volToL[unit] !== undefined){
+      const liters = n * volToL[unit];
+      if(targetSystem === 'Metric'){
+          if(liters >= 1) return { val: liters, unit: 'l' };
+          if(liters >= 0.001) return { val: liters*1000, unit: 'ml' };
+          return { val: liters*1000000, unit: 'ml' };
+      } else {
+          // prefer gallons for >= 0.5 gal, else show pt/cup/tsp
+          const gals = liters / 3.78541;
+          if(gals >= 0.5) return { val: gals, unit: 'gal' };
+          const pints = liters / 0.473176;
+          if(pints >= 1) return { val: pints, unit: 'pt' };
+          const cups = liters / 0.24;
+          if(cups >= 1) return { val: cups, unit: 'cup' };
+          const tsps = liters / 0.00492892;
+          return { val: tsps, unit: 'tsp' };
+      }
+    }
+    return null;
+  }
+
+  function formatNumberForLocale(n){
+    try{
+      const locale = (NUMBER_LOCALE && NUMBER_LOCALE !== 'auto') ? NUMBER_LOCALE : (navigator && navigator.language) ? navigator.language : undefined;
+      const opts = { maximumFractionDigits: 4 };
+      return new Intl.NumberFormat(locale, opts).format(n);
+    }catch(e){ return String(n); }
   }
 
   function convertTime(hh, mm, ampm, fromTZ, toTZ){
@@ -326,7 +401,8 @@
 
     collect(CURRENCY_REGEX, 'currency');
     collect(CURRENCY_SYMBOL_REGEX, 'currency');
-    collect(TEMP_REGEX, 'temp');
+  collect(TEMP_REGEX, 'temp');
+  collect(MEASUREMENT_REGEX, 'measurement');
     collect(TIME_REGEX, 'time');
 
     if(matches.length === 0) return;
@@ -360,6 +436,23 @@
       } else if(m.type === 'time'){
         const parts = m.text.match(/(\d{1,2}):(\d{2})\s?(AM|PM)?\s?(PST|EST|CET|IST)/i);
   if(parts){ const hh = parseInt(parts[1],10); const mm = parseInt(parts[2],10); const ampm = parts[3]; const tz = parts[4].toUpperCase(); attachHover(span, {type:'time', hh, mm, ampm, tz, target: prefs.timezone}, (t)=>convertTime(t.hh, t.mm, t.ampm, t.tz, prefs.timezone)); }
+      } else if(m.type === 'measurement'){
+        const parts = m.text.match(/(-?\d+(?:\.\d+)?)(?:\s*)(mm|cm|m|km|in|ft|yd|mi|mcg|ug|mg|g|kg|t|ton|tonne|lb|oz|ml|l|m3|m\^3|cubic\s*m|cubic\s*meter|cubic\s*metre|gal|pt|cup|tsp|teaspoon|tbsp|tablespoon)/i);
+        if(parts){
+          const val = parseFloat(parts[1].replace(/,/g,''));
+          let unit = (parts[2] || '').toLowerCase().trim();
+          // normalize common variants to keys used in convertMeasurement maps
+          unit = unit.replace(/\^/g, '').replace(/\s+/g, ' ');
+          if(unit === 'cubic m' || unit === 'cubic meter' || unit === 'cubic metre' || unit === 'm3' || unit === 'm3') unit = 'm3';
+          if(unit === 'teaspoon') unit = 'tsp';
+          if(unit === 'tablespoon') unit = 'tbsp';
+          if(unit === 'tonne') unit = 't';
+          if(unit === 'microgram') unit = 'mcg';
+          // strip plural s
+          unit = unit.replace(/s$/,'');
+          const conv = convertMeasurement(val, unit, MEASUREMENT_PREF || prefs.measurement || 'Metric');
+          if(conv){ const formatted = formatNumberForLocale(conv.val) + ' ' + conv.unit; attachHover(span, { type:'measurement', val, unit, conv }, ()=>formatted); }
+        }
       }
 
       try{
@@ -568,8 +661,8 @@
   const relevant = ['fxRates', 'ratesToINR', 'currency', 'temperature', 'timezone', 'showFormula'];
         const keys = Object.keys(changes || {});
         if(keys.some(k => relevant.includes(k))){
-          // reload stored fxRates and showFormula pref, then re-run full scan
-          safeGetStorage({ ratesToINR: ratesToINR, fxRates: null, showFormula: true }, (items)=>{ if(items){ if(items.ratesToINR) ratesToINR = items.ratesToINR; if(items.fxRates) fxRates = items.fxRates; if(typeof items.showFormula !== 'undefined') SHOW_FORMULA = items.showFormula; }
+          // reload stored fxRates, showFormula, measurement prefs and number locale, then re-run full scan
+          safeGetStorage({ ratesToINR: ratesToINR, fxRates: null, showFormula: true, measurement: 'Metric', numberLocale: 'auto' }, (items)=>{ if(items){ if(items.ratesToINR) ratesToINR = items.ratesToINR; if(items.fxRates) fxRates = items.fxRates; if(typeof items.showFormula !== 'undefined') SHOW_FORMULA = items.showFormula; if(items.measurement) MEASUREMENT_PREF = items.measurement; if(items.numberLocale) NUMBER_LOCALE = items.numberLocale; }
             // debounce a tiny bit to allow multiple storage changes to coalesce
             if(scheduledRun) clearTimeout(scheduledRun);
             scheduledRun = setTimeout(()=>{
