@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const kgVal = 2.5; $('preview-meas-kg').textContent = nf(kgVal) + ' kg';
         const l = 1 * 3.78541; $('preview-meas-gal').textContent = nf(l) + ' l';
       } else {
-        const inchesToFt = (12/12); $('preview-meas-in').textContent = '1 ft';
+        $('preview-meas-in').textContent = '1 ft';
         const lb = 2.5 * 2.20462; $('preview-meas-kg').textContent = nf(lb) + ' lb';
         const gal = 1; $('preview-meas-gal').textContent = nf(gal) + ' gal';
       }
